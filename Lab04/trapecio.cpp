@@ -1,9 +1,6 @@
 #include <iostream>
 #include <thread>
-#include <vector>
 #include <cmath>
-#include <functional>
-#include <mutex>
 #include <iomanip>
 
 using namespace std;
@@ -23,59 +20,73 @@ public:
     }
 };
 
-// Clase que representa un thread
+// Clase TrabajadorTrapecio 
 class TrabajadorTrapecio {
 private:
-    const FuncionUnivariable& f;
+    const FuncionUnivariable* f;
     double a, h;
     int inicio, fin;
-    double sumaParcial = 0.0;
+    double* sumaParcial;
 
 public:
-    TrabajadorTrapecio(const FuncionUnivariable& f, double a, double h, int inicio, int fin)
-        : f(f), a(a), h(h), inicio(inicio), fin(fin) {}
+    TrabajadorTrapecio(const FuncionUnivariable* f, double a, double h, int inicio, int fin)
+        : f(f), a(a), h(h), inicio(inicio), fin(fin) {
+        sumaParcial = new double(0.0);
+    }
+
+    ~TrabajadorTrapecio() {
+        delete sumaParcial;
+    }
 
     void operator()() {
         for (int i = inicio; i <= fin; ++i) {
             double xi = a + i * h;
-            sumaParcial += f.evaluar(xi);
+            *sumaParcial += f->evaluar(xi);
         }
     }
 
-    double getSumaParcial() const { return sumaParcial; }
-    double& getRefSumaParcial() { return sumaParcial; }
+    double getSumaParcial() const { return *sumaParcial; }
 };
 
-
-// Clase principal: calcula integral por método del trapecio
+// Clase Trapecio 
 class Trapecio {
 public:
-    static double integrar(const FuncionUnivariable& f, double a, double b, int n, int numHilos) {
+    static double integrar(const FuncionUnivariable* f, double a, double b, int n, int numHilos) {
         double h = (b - a) / n;
-        vector<thread> hilos;
-        vector<TrabajadorTrapecio> trabajadores;
+
+        // Memoria dinámica para arrays de punteros
+        TrabajadorTrapecio** trabajadores = new TrabajadorTrapecio*[numHilos];
+        thread** hilos = new thread*[numHilos];
 
         int tamañoBloque = n / numHilos;
 
-        // Crear trabajadores
+        // Crear objetos trabajadores dinámicamente
         for (int t = 0; t < numHilos; ++t) {
             int inicio = t * tamañoBloque + 1;
             int fin = (t == numHilos - 1) ? n - 1 : (inicio + tamañoBloque - 1);
-            trabajadores.emplace_back(f, a, h, inicio, fin);
+            trabajadores[t] = new TrabajadorTrapecio(f, a, h, inicio, fin);
         }
 
-        // Lanzar threads
+        // Lanzar hilos dinámicamente
         for (int t = 0; t < numHilos; ++t)
-            hilos.emplace_back(ref(trabajadores[t]));
+            hilos[t] = new thread(ref(*trabajadores[t]));
 
-        // Esperar threads
-        for (auto& hilo : hilos)
-            hilo.join();
+        // Esperar hilos
+        for (int t = 0; t < numHilos; ++t) {
+            hilos[t]->join();
+            delete hilos[t];
+        }
 
         // Calcular suma total
-        double suma = f.evaluar(a) + f.evaluar(b);
-        for (auto& trab : trabajadores)
-            suma += 2 * trab.getSumaParcial();
+        double suma = f->evaluar(a) + f->evaluar(b);
+        for (int t = 0; t < numHilos; ++t) {
+            suma += 2 * trabajadores[t]->getSumaParcial();
+            delete trabajadores[t];
+        }
+
+        // Liberar arrays
+        delete[] trabajadores;
+        delete[] hilos;
 
         return (h / 2.0) * suma;
     }
@@ -94,7 +105,7 @@ int main() {
     cout << fixed << setprecision(12);
 
     while (true) {
-        actual = Trapecio::integrar(f, a, b, n, numHilos);
+        actual = Trapecio::integrar(&f, a, b, n, numHilos);
         cout << "n = " << setw(6) << n << "   Área aproximada = " << actual << endl;
 
         if (n > 1 && fabs(actual - anterior) < tolerancia) {
