@@ -54,5 +54,39 @@ public class Trapecio {
 
         return (h / 2) * suma;
     }
-    public static void main(String[] args)  {}
+    public static void main(String[] args) throws InterruptedException {
+        FuncionUnivariable f = x -> 2 * x * x + 3 * x + 0.5;
+        double a = 2, b = 20;
+        int numHilos = 4;
+
+        double anterior = 0.0;
+        double actual;
+        int n = 1;
+
+        double tolerancia = 1e-9;
+        int incremento = 50;
+
+        System.out.println("Cálculo del área bajo la curva f(x) = 2x² + 3x + 0.5");
+        System.out.println("Intervalo [" + a + ", " + b + "]\n");
+
+        while (true) {
+            actual = integrar(f, a, b, n, numHilos);
+            System.out.printf("n = %-6d  Área aproximada = %.12f%n", n, actual);
+
+            if (n > 1 && Math.abs(actual - anterior) < tolerancia) {
+                System.out.println("\nEl valor de la integral se ha estabilizado");
+                System.out.printf("Valor final aproximado: %.12f%n", actual);
+                break;
+            }
+
+            anterior = actual;
+            n += incremento;
+        }
+
+        double exacto = (2.0 / 3.0) * Math.pow(b, 3) + (3.0 / 2.0) * b * b + 0.5 * b
+                - ((2.0 / 3.0) * Math.pow(a, 3) + (3.0 / 2.0) * a * a + 0.5 * a);
+
+        System.out.printf("\nValor exacto (analítico): %.12f%n", exacto);
+        System.out.printf("Error absoluto: %.12f%n", Math.abs(actual - exacto));
+    }
 }
